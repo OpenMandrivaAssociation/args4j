@@ -5,7 +5,7 @@ Name:              args4j
 
 Version:          2.0.25
 Release:          1.0%{?dist}
-Summary:          Small Java lib that makes it easy to parse command line options/args in CUI apps
+Summary:          Small Java lib to parse command line options/args in CUI apps
 License:          MIT and BSD
 
 # http://args4j.java.net/
