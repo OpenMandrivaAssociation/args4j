@@ -1,11 +1,11 @@
-%_javapackages_macros
+%{?_javapackages_macros:%_javapackages_macros}
 Name:              args4j
 %global tools_name %{name}-tools
 %global site_name  %{name}-site
 
 Version:          2.0.25
 Release:          1.0%{?dist}
-Summary:          Small Java lib to parse command line options/args in CUI apps
+Summary:          Small Java lib that makes it easy to parse command line options/args in CUI apps
 License:          MIT and BSD
 
 # http://args4j.java.net/
@@ -95,3 +95,45 @@ cp -pr target/site/apidocs/* %{buildroot}%{_javadocdir}/%{name}
 %files javadoc
 %doc %{name}/LICENSE.txt
 %doc %{_javadocdir}/%{name}
+
+%changelog
+* Sat Aug 10 2013 Mat Booth <fedora@matbooth.co.uk> - 2.0.25-1
+- Update to latest upstream, fixes #981339
+
+* Sat Aug 03 2013 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.0.23-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_20_Mass_Rebuild
+
+* Thu Jun 27 2013 Mat Booth <fedora@matbooth.co.uk> - 2.0.23-1
+- Update to latest upstream, fixes #808703
+- Also drop unneeded patches
+
+* Wed Feb 13 2013 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.0.16-11
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_19_Mass_Rebuild
+
+* Wed Feb 06 2013 Java SIG <java-devel@lists.fedoraproject.org> - 2.0.16-10
+- Update for https://fedoraproject.org/wiki/Fedora_19_Maven_Rebuild
+- Replace maven BuildRequires with maven-local
+
+* Thu Dec 13 2012 Roland Grunberg <rgrunber@redhat.com> - 2.0.16-9
+- Update to conform with latest Java packaging guidelines.
+
+* Wed Jul 18 2012 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.0.16-8
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_18_Mass_Rebuild
+
+* Tue Jan 31 2012 Ville Skyttä <ville.skytta@iki.fi> - 2.0.16-7
+- Apply upstream source encoding patch to fix build with java 1.7.
+
+* Thu Jan 12 2012 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.0.16-5
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_17_Mass_Rebuild
+
+* Mon Jun 13 2011 Jaromir Capik <jcapik@redhat.com> - 2.0.16-4
+- OSGi metadata generated
+
+* Mon May 30 2011 Jaromir Capik <jcapik@redhat.com> - 2.0.16-3
+- Removal of bundled stuff in args4j/lib
+
+* Wed May 25 2011 Jaromir Capik <jcapik@redhat.com> - 2.0.16-2
+- Removal of unused ant dependency
+
+* Tue May 24 2011 Jaromir Capik <jcapik@redhat.com> - 2.0.16-1
+- Initial version of the package
