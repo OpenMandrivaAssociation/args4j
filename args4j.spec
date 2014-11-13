@@ -1,102 +1,102 @@
 %{?_javapackages_macros:%_javapackages_macros}
-Name:              args4j
-%global tools_name %{name}-tools
-%global site_name  %{name}-site
+Name:           args4j
+Version:        2.0.30
+Release:        1%{?dist}
+Summary:        Java command line arguments parser
+License:        MIT
+URL:            http://args4j.kohsuke.org/
+Source0:        https://github.com/kohsuke/%{name}/archive/%{name}-site-%{version}.tar.gz
 
-Version:          2.0.25
-Release:          1.0%{?dist}
-Summary:          Small Java lib to parse command line options/args in CUI apps
-License:          MIT and BSD
+BuildArch:      noarch
 
-# http://args4j.java.net/
-URL:              http://%{name}.java.net/
-Source0:          https://github.com/kohsuke/%{name}/archive/%{site_name}-%{version}.tar.gz
-
-BuildArch:        noarch
-
-BuildRequires:    java-devel
-BuildRequires:    jpackage-utils
-BuildRequires:    maven-local
-BuildRequires:    maven-dependency-plugin
-BuildRequires:    maven-install-plugin
-BuildRequires:    maven-shade-plugin
-BuildRequires:    mockito
-
-Requires:         java
-Requires:         jpackage-utils
+BuildRequires:  maven-local
+BuildRequires:  mvn(com.sun:tools)
+BuildRequires:  mvn(junit:junit)
+BuildRequires:  mvn(org.apache.felix:maven-bundle-plugin)
+BuildRequires:  mvn(org.apache.maven.plugins:maven-shade-plugin)
+BuildRequires:  mvn(org.apache.maven.plugins:maven-site-plugin)
+BuildRequires:  mvn(org.kohsuke:pom:pom:)
+BuildRequires:  mvn(org.mockito:mockito-all)
 
 %description
 args4j is a small Java class library that makes it easy
 to parse command line options/arguments in your CUI application.
-- It makes the command line parsing very easy by using annotations.
-- You can generate the usage screen very easily.
-- You can generate HTML/XML that lists all options for your documentation.
-- Fully supports localization.
+- It makes the command line parsing very easy by using annotations
+- You can generate the usage screen very easily
+- You can generate HTML/XML that lists all options for your documentation
+- Fully supports localization
 - It is designed to parse javac like options (as opposed to GNU-style
-  where ls -lR is considered to have two options l and R.)
-
-args4j-tools are development-time tools for generating additional artifacits.
+  where ls -lR is considered to have two options l and R)
 
 %package javadoc
-Summary:          API documentation for %{name}
-
-Requires:         jpackage-utils
+Summary:        API documentation for %{name}
 
 %description javadoc
 This package contains the API documentation for %{name}.
 
 %prep
-%setup -q -n %{name}-%{site_name}-%{version}
+%setup -q -n %{name}-%{name}-site-%{version}
 
 # removing classpath addition
-sed -i 's/<addClasspath>true/<addClasspath>false/g' %{tools_name}/pom.xml
+sed -i 's/<addClasspath>true/<addClasspath>false/g' %{name}-tools/pom.xml
 
 # fix ant group id
-sed -i 's/<groupId>ant/<groupId>org.apache.ant/g' %{tools_name}/pom.xml
+sed -i 's/<groupId>ant/<groupId>org.apache.ant/g' %{name}-tools/pom.xml
 
 # removing bundled stuff
 find -name '*.class' -exec rm -f '{}' \;
 find -name '*.jar' -exec rm -f '{}' \;
 
-%pom_xpath_remove "pom:parent"
+# XMvn cannot generate requires on dependecies with scope "system"
+%pom_xpath_remove "pom:profile[pom:id[text()='jdk-tools-jar']]" %{name}-tools
+%pom_add_dep com.sun:tools %{name}-tools
+
+# we don't need these now
+%pom_disable_module args4j-maven-plugin
+%pom_disable_module args4j-maven-plugin-example
+
+# install also compat symlinks
+%mvn_file ":{*}" %{name}/@1 @1
 
 %build
-mvn-rpmbuild -pl :args4j-site,:args4j,:args4j-tools install javadoc:aggregate
+%mvn_build
 
 %install
-# jars
-install -d -m 755 %{buildroot}%{_javadir}
-install -p -m 644 %{name}/target/%{name}-%{version}.jar %{buildroot}%{_javadir}/%{name}.jar
-install -p -m 644 %{tools_name}/target/%{tools_name}-%{version}.jar %{buildroot}%{_javadir}/%{tools_name}.jar
+%mvn_install
 
-# pom
-install -d -m 755 %{buildroot}%{_mavenpomdir}
-install -pm 644 pom.xml %{buildroot}%{_mavenpomdir}/JPP-%{site_name}.pom
-install -pm 644 %{name}/pom.xml %{buildroot}%{_mavenpomdir}/JPP-%{name}.pom
-install -pm 644 %{tools_name}/pom.xml %{buildroot}%{_mavenpomdir}/JPP-%{tools_name}.pom
 
-%add_maven_depmap JPP-%{site_name}.pom
-%add_maven_depmap JPP-%{name}.pom %{name}.jar
-%add_maven_depmap JPP-%{tools_name}.pom %{tools_name}.jar
-
-# javadoc
-install -d -m 755 %{buildroot}%{_javadocdir}/%{name}
-cp -pr target/site/apidocs/* %{buildroot}%{_javadocdir}/%{name}
-
-%files
+%files -f .mfiles
+%dir %{_javadir}/%{name}
 %doc %{name}/LICENSE.txt
-%{_javadir}/%{name}.jar
-%{_javadir}/%{tools_name}.jar
-%{_mavenpomdir}/JPP-%{site_name}.pom
-%{_mavenpomdir}/JPP-%{name}.pom
-%{_mavenpomdir}/JPP-%{tools_name}.pom
-%{_mavendepmapfragdir}/%{name}
 
-%files javadoc
+%files javadoc -f .mfiles-javadoc
 %doc %{name}/LICENSE.txt
-%doc %{_javadocdir}/%{name}
 
 %changelog
+* Mon Sep 01 2014 Michal Srb <msrb@redhat.com> - 2.0.30-1
+- Update to upstream version 2.0.30
+
+* Sat Jun 07 2014 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.0.28-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_21_Mass_Rebuild
+
+* Mon May 12 2014 Michal Srb <msrb@redhat.com> - 2.0.28-1
+- Update to upstream version 2.0.28
+
+* Wed May 07 2014 Michal Srb <msrb@redhat.com> - 2.0.27-1
+- Update to upstream version 2.0.27
+
+* Tue May 06 2014 Michal Srb <msrb@redhat.com> - 2.0.26-4
+- Port to JSR-269
+
+* Tue Mar 04 2014 Stanislav Ochotnicky <sochotnicky@redhat.com> - 2.0.26-3
+- Use Requires: java-headless rebuild (#1067528)
+
+* Thu Feb 20 2014 Michal Srb <msrb@redhat.com> - 2.0.26-2
+- Adapt to current guidelines
+
+* Thu Feb 20 2014 Michal Srb <msrb@redhat.com> - 2.0.26-1
+- Update to latest upstream 2.0.26
+
 * Sat Aug 10 2013 Mat Booth <fedora@matbooth.co.uk> - 2.0.25-1
 - Update to latest upstream, fixes #981339
 
@@ -137,3 +137,4 @@ cp -pr target/site/apidocs/* %{buildroot}%{_javadocdir}/%{name}
 
 * Tue May 24 2011 Jaromir Capik <jcapik@redhat.com> - 2.0.16-1
 - Initial version of the package
+
