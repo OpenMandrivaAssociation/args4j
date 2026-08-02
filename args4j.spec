@@ -1,6 +1,6 @@
 %{?_javapackages_macros:%_javapackages_macros}
 Name:           args4j
-Version:        2.0.30
+Version:        2.33
 Release:        1%{?dist}
 Summary:        Java command line arguments parser
 License:        MIT
@@ -35,7 +35,7 @@ Summary:        API documentation for %{name}
 This package contains the API documentation for %{name}.
 
 %prep
-%setup -q -n %{name}-%{name}-site-%{version}
+%setup -q -n args4j-args4j-site-2.33
 
 # removing classpath addition
 sed -i 's/<addClasspath>true/<addClasspath>false/g' %{name}-tools/pom.xml
