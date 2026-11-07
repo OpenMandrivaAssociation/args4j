@@ -1,140 +1,176 @@
-%{?_javapackages_macros:%_javapackages_macros}
-Name:           args4j
-Version:        2.33
-Release:        1%{?dist}
-Summary:        Java command line arguments parser
-License:        MIT
-URL:            https://args4j.kohsuke.org/
-Source0:        https://github.com/kohsuke/%{name}/archive/%{name}-site-%{version}.tar.gz
+Name:		args4j
+Version:	2.37
+Release:	1
+Summary:	Java command line arguments parser
+Group:		Development/Java
+License:	MIT
+URL:		https://github.com/kohsuke/args4j
+Source0:	https://github.com/kohsuke/args4j/archive/refs/tags/args4j-site-%{version}.tar.gz#/args4j-site-%{version}.tar.gz
 
-BuildArch:      noarch
-
-BuildRequires:  maven-local
-BuildRequires:  mvn(com.sun:tools)
-BuildRequires:  mvn(junit:junit)
-BuildRequires:  mvn(org.apache.felix:maven-bundle-plugin)
-BuildRequires:  mvn(org.apache.maven.plugins:maven-shade-plugin)
-BuildRequires:  mvn(org.apache.maven.plugins:maven-site-plugin)
-BuildRequires:  mvn(org.kohsuke:pom:pom:)
-BuildRequires:  mvn(org.mockito:mockito-all)
+BuildArch:	noarch
+BuildRequires:	python
+# Literal, so the first rpmbuild -bs records them before sysjar is installed.
+BuildRequires:	maven
+BuildRequires:	java-current-devel
+BuildSystem:	maven
 
 %description
-args4j is a small Java class library that makes it easy
-to parse command line options/arguments in your CUI application.
-- It makes the command line parsing very easy by using annotations
-- You can generate the usage screen very easily
-- You can generate HTML/XML that lists all options for your documentation
-- Fully supports localization
-- It is designed to parse javac like options (as opposed to GNU-style
-  where ls -lR is considered to have two options l and R)
-
-%package javadoc
-Summary:        API documentation for %{name}
-
-%description javadoc
-This package contains the API documentation for %{name}.
+args4j parses command line options from annotations. 2.37 is the
+current release. This build ships the library and args4j-tools. The
+Maven plugin is not built. The tools jar launches the option-list
+generator through javax.tools.JavaCompiler. The build targets Java 11
+and skips tests. The automatic module names are args4j and args4j.tools.
 
 %prep
-%setup -q -n args4j-args4j-site-2.33
+%autosetup -n args4j-args4j-site-%{version}
+python - <<'PY'
+import xml.etree.ElementTree as ET
+from pathlib import Path
 
-# removing classpath addition
-sed -i 's/<addClasspath>true/<addClasspath>false/g' %{name}-tools/pom.xml
+NS = "http://maven.apache.org/POM/4.0.0"
+ET.register_namespace("", NS)
 
-# fix ant group id
-sed -i 's/<groupId>ant/<groupId>org.apache.ant/g' %{name}-tools/pom.xml
+def tag(name):
+    return "{" + NS + "}" + name
 
-# removing bundled stuff
-find -name '*.class' -exec rm -f '{}' \;
-find -name '*.jar' -exec rm -f '{}' \;
+def add(parent, name, text):
+    node = ET.SubElement(parent, tag(name))
+    node.text = text
+    return node
 
-# XMvn cannot generate requires on dependecies with scope "system"
-%pom_xpath_remove "pom:profile[pom:id[text()='jdk-tools-jar']]" %{name}-tools
-%pom_add_dep com.sun:tools %{name}-tools
+def resources(build):
+    box = ET.SubElement(build, tag("resources"))
+    resource = ET.SubElement(box, tag("resource"))
+    add(resource, "directory", "src")
+    includes = ET.SubElement(resource, tag("includes"))
+    add(includes, "include", "**/*.properties")
+    add(includes, "include", "META-INF/services/*")
 
-# we don't need these now
-%pom_disable_module args4j-maven-plugin
-%pom_disable_module args4j-maven-plugin-example
+def jar_plugin(build, module_name, main_class):
+    plugins = ET.SubElement(build, tag("plugins"))
+    plugin = ET.SubElement(plugins, tag("plugin"))
+    add(plugin, "groupId", "org.apache.maven.plugins")
+    add(plugin, "artifactId", "maven-jar-plugin")
+    add(plugin, "version", "3.3.0")
+    configuration = ET.SubElement(plugin, tag("configuration"))
+    archive = ET.SubElement(configuration, tag("archive"))
+    if main_class:
+        manifest = ET.SubElement(archive, tag("manifest"))
+        add(manifest, "mainClass", main_class)
+    entries = ET.SubElement(archive, tag("manifestEntries"))
+    add(entries, "Automatic-Module-Name", module_name)
+    return plugins
 
-# install also compat symlinks
-%mvn_file ":{*}" %{name}/@1 @1
+def project(artifact, module_name, main_class, depend_on_args4j):
+    root = ET.Element(tag("project"))
+    add(root, "modelVersion", "4.0.0")
+    add(root, "groupId", "args4j")
+    add(root, "artifactId", artifact)
+    add(root, "version", "%{version}")
+    add(root, "packaging", "jar")
+    props = ET.SubElement(root, tag("properties"))
+    add(props, "maven.compiler.release", "11")
+    build = ET.SubElement(root, tag("build"))
+    add(build, "sourceDirectory", "src")
+    resources(build)
+    plugins = jar_plugin(build, module_name, main_class)
+    compiler = ET.SubElement(plugins, tag("plugin"))
+    add(compiler, "groupId", "org.apache.maven.plugins")
+    add(compiler, "artifactId", "maven-compiler-plugin")
+    add(compiler, "version", "3.12.1")
+    configuration = ET.SubElement(compiler, tag("configuration"))
+    add(configuration, "release", "11")
+    add(configuration, "compilerArgument", "-proc:none")
+    if depend_on_args4j:
+        deps = ET.SubElement(root, tag("dependencies"))
+        dep = ET.SubElement(deps, tag("dependency"))
+        add(dep, "groupId", "args4j")
+        add(dep, "artifactId", "args4j")
+        add(dep, "version", "%{version}")
+        # Hidden from builddep. %build -p removes this before Maven runs.
+        add(dep, "optional", "true")
+    return root
 
-%build
-%mvn_build
+main_java = list(Path("args4j/src").rglob("*.java"))
+tools_java = list(Path("args4j-tools/src").rglob("*.java"))
+if len(main_java) != 63 or len(tools_java) != 11:
+    raise SystemExit("unexpected java file count")
 
-%install
-%mvn_install
+aggregator = ET.Element(tag("project"))
+add(aggregator, "modelVersion", "4.0.0")
+add(aggregator, "groupId", "args4j")
+add(aggregator, "artifactId", "args4j-site")
+add(aggregator, "version", "%{version}")
+add(aggregator, "packaging", "pom")
+modules = ET.SubElement(aggregator, tag("modules"))
+add(modules, "module", "args4j")
+add(modules, "module", "args4j-tools")
+ET.ElementTree(aggregator).write("pom.xml", encoding="utf-8", xml_declaration=True)
+ET.ElementTree(project("args4j", "args4j", "", False)).write(
+    "args4j/pom.xml", encoding="utf-8", xml_declaration=True)
+ET.ElementTree(project("args4j-tools", "args4j.tools", "org.kohsuke.args4j.apt.Main", True)).write(
+    "args4j-tools/pom.xml", encoding="utf-8", xml_declaration=True)
 
+text = Path("pom.xml").read_text(encoding="utf-8")
+text += Path("args4j/pom.xml").read_text(encoding="utf-8")
+text += Path("args4j-tools/pom.xml").read_text(encoding="utf-8")
+for needle in (
+    "<packaging>pom</packaging>",
+    "<module>args4j</module>",
+    "<module>args4j-tools</module>",
+    "<maven.compiler.release>11</maven.compiler.release>",
+    "<Automatic-Module-Name>args4j</Automatic-Module-Name>",
+    "<Automatic-Module-Name>args4j.tools</Automatic-Module-Name>",
+    "<optional>true</optional>",
+):
+    if needle not in text:
+        raise SystemExit("missing " + needle)
+if "<module>args4j-maven-plugin</module>" in text or "<packaging>bundle</packaging>" in text:
+    raise SystemExit("plugin module or bundle packaging leaked")
+if "maven-bundle-plugin" in text or "maven-assembly-plugin" in text or "org.kohsuke</groupId>" in text:
+    raise SystemExit("unwanted plugin leaked")
+PY
+
+%build -p
+python - <<'PY'
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+path = Path("args4j-tools/pom.xml")
+ET.register_namespace("", "http://maven.apache.org/POM/4.0.0")
+tree = ET.parse(path)
+root = tree.getroot()
+
+def local(name):
+    return name.rsplit("}", 1)[-1]
+
+removed = 0
+for parent in list(root.iter()):
+    for child in list(parent):
+        if local(child.tag) == "optional":
+            parent.remove(child)
+            removed += 1
+if removed != 1:
+    raise SystemExit("expected one optional marker")
+tree.write(path, encoding="utf-8", xml_declaration=True)
+text = path.read_text(encoding="utf-8")
+if "<optional>" in text:
+    raise SystemExit("optional marker remains")
+if "<artifactId>args4j</artifactId>" not in text:
+    raise SystemExit("args4j dependency missing")
+PY
+
+%build -a
+cat > manifest-addition <<'EOF'
+Automatic-Module-Name: args4j
+EOF
+jar ufm args4j/target/args4j-%{version}.jar manifest-addition
+java --module-path args4j/target/args4j-%{version}.jar --describe-module args4j | grep -q '^args4j'
+cat > manifest-addition <<'EOF'
+Automatic-Module-Name: args4j.tools
+EOF
+jar ufm args4j-tools/target/args4j-tools-%{version}.jar manifest-addition
+java --module-path args4j-tools/target/args4j-tools-%{version}.jar --describe-module args4j.tools | grep -q '^args4j.tools'
 
 %files -f .mfiles
-%dir %{_javadir}/%{name}
-%doc %{name}/LICENSE.txt
-
-%files javadoc -f .mfiles-javadoc
-%doc %{name}/LICENSE.txt
-
-%changelog
-* Mon Sep 01 2014 Michal Srb <msrb@redhat.com> - 2.0.30-1
-- Update to upstream version 2.0.30
-
-* Sat Jun 07 2014 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.0.28-2
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_21_Mass_Rebuild
-
-* Mon May 12 2014 Michal Srb <msrb@redhat.com> - 2.0.28-1
-- Update to upstream version 2.0.28
-
-* Wed May 07 2014 Michal Srb <msrb@redhat.com> - 2.0.27-1
-- Update to upstream version 2.0.27
-
-* Tue May 06 2014 Michal Srb <msrb@redhat.com> - 2.0.26-4
-- Port to JSR-269
-
-* Tue Mar 04 2014 Stanislav Ochotnicky <sochotnicky@redhat.com> - 2.0.26-3
-- Use Requires: java-headless rebuild (#1067528)
-
-* Thu Feb 20 2014 Michal Srb <msrb@redhat.com> - 2.0.26-2
-- Adapt to current guidelines
-
-* Thu Feb 20 2014 Michal Srb <msrb@redhat.com> - 2.0.26-1
-- Update to latest upstream 2.0.26
-
-* Sat Aug 10 2013 Mat Booth <fedora@matbooth.co.uk> - 2.0.25-1
-- Update to latest upstream, fixes #981339
-
-* Sat Aug 03 2013 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.0.23-2
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_20_Mass_Rebuild
-
-* Thu Jun 27 2013 Mat Booth <fedora@matbooth.co.uk> - 2.0.23-1
-- Update to latest upstream, fixes #808703
-- Also drop unneeded patches
-
-* Wed Feb 13 2013 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.0.16-11
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_19_Mass_Rebuild
-
-* Wed Feb 06 2013 Java SIG <java-devel@lists.fedoraproject.org> - 2.0.16-10
-- Update for https://fedoraproject.org/wiki/Fedora_19_Maven_Rebuild
-- Replace maven BuildRequires with maven-local
-
-* Thu Dec 13 2012 Roland Grunberg <rgrunber@redhat.com> - 2.0.16-9
-- Update to conform with latest Java packaging guidelines.
-
-* Wed Jul 18 2012 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.0.16-8
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_18_Mass_Rebuild
-
-* Tue Jan 31 2012 Ville Skyttä <ville.skytta@iki.fi> - 2.0.16-7
-- Apply upstream source encoding patch to fix build with java 1.7.
-
-* Thu Jan 12 2012 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.0.16-5
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_17_Mass_Rebuild
-
-* Mon Jun 13 2011 Jaromir Capik <jcapik@redhat.com> - 2.0.16-4
-- OSGi metadata generated
-
-* Mon May 30 2011 Jaromir Capik <jcapik@redhat.com> - 2.0.16-3
-- Removal of bundled stuff in args4j/lib
-
-* Wed May 25 2011 Jaromir Capik <jcapik@redhat.com> - 2.0.16-2
-- Removal of unused ant dependency
-
-* Tue May 24 2011 Jaromir Capik <jcapik@redhat.com> - 2.0.16-1
-- Initial version of the package
-
+%doc LICENSE
